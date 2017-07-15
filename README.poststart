@@ -1,0 +1,330 @@
+README.poststart
+
+sIMpLe
+Copyright(C) 2016 Brett Lee <brett@brettlee.com>, All Rights Reserved
+
+
+======================================================================
+POST START
+======================================================================
+
+AFTER starting the VMs, run these commands from the IML node:
+                                           ^^^^^^^^^^^^^^^^^^
+
+1.  Generate a SSH keypair.
+      # ssh-keygen
+
+2.  Copy the public key to the MGS, MDS and OSS's:
+      # ssh-copy-id <node>
+
+      Example:
+      iml# for a in mgs mds oss1 oss2; do ssh-copy-id ee-$a; done
+
+3.  Create these files in CWD.
+
+# eth1
+# ----------------------------------------------
+DEVICE=eth1
+TYPE=Ethernet
+ONBOOT=yes
+NM_CONTROLLED=no
+BOOTPROTO=none
+IPADDR=172.16.1.x
+PREFIX=24
+
+
+# eth2
+# ----------------------------------------------
+DEVICE=eth2
+TYPE=Ethernet
+ONBOOT=no
+
+    Then copy both files to the MGS, MDS, and OSS's:
+
+    Example:
+    iml# for a in mgs mds oss1 oss2; do
+         scp eth1 ee-$a:/etc/sysconfig/network-scripts/ifcfg-eth1; done
+    iml# for a in mgs mds oss1 oss2; do
+         scp eth2 ee-$a:/etc/sysconfig/network-scripts/ifcfg-eth2; done
+
+
+4.  Run these commands to configure the LNET interface:
+
+    iml# for a in mgs mds oss1 oss2 ; do ssh ee-$a ; done
+
+      And while ssh'd in to each node, run these commands to
+        set the eth1 IP addresses:
+
+      node#  vi /etc/sysconfig/network-scripts/ifcfg-eth1
+      node#  service network restart ; exit
+
+5.  scp the Intel EE release to the IML node, and extract the contents.
+
+      kvm# scp -r /tmp/ieel-2.3.0.0 ee-iml:
+
+6.  Run the Intel EE ./install script on the IML node.
+    For details, see the Partner Installation Guide.
+
+7.  Use the IML GUI (https://ee-iml/ui/) to deploy Lustre.
+    For details, see the IML Users Guide.
+
+    Here are some approximate times* to completion:
+    Node verification:   2 min
+    Deploy agent:        5 min
+    Setup servers:      30 min
+    Create filesystem:   5 min
+
+    * Times are for newly imaged servers.  Repeating the process
+      (shown below) results in much faster times.
+
+
+=======================================================================
+SIMPLE WAY TO REPEAT IT ALL
+=======================================================================
+
+After installing IML and deploying a file system, you may want to
+repeat the process.  To simplify this, all you need to do is to
+reset both IML as well as the Lustre servers.
+
+1. Reset IML using these steps:
+
+   a.  Close the web browser connection to IML.
+
+   b.  On IML, run:
+
+	# service chroma-supervisor stop
+
+	# su - postgres
+
+	$ psql
+
+	postgres# drop database chroma;
+
+	postgres# <Ctrl-D>
+
+	$ exit
+
+   c.  Re-run ./install on the IML node:
+
+	# cd ~/ieel-<release>
+
+	# ./install	<-- install goes much faster this time...
+
+2. Reset the Lustre servers by resetting eth2 and the HA config.
+
+   a.  scp the "eth2" file to the Lustre servers again.
+
+       # for a in mgs mds oss1 oss2; do
+         scp eth2 ee-$a:/etc/sysconfig/network-scripts/ifcfg-eth2; done
+
+   b.  SSH to each Lustre node and run a few commands.
+
+       Use this loop to help:
+
+       # for a in mgs mds oss1 oss2 ; do ssh ee-$a ; done
+
+       And while connected to each node via the loop, run these commands:
+
+       (Copy and paste these together as one command, including the CR after the "exit".)
+
+       pcs resource|while read a; do pcs resource delete `echo $a |awk '{print $1}'`; done
+       cibadmin -E --force
+       chkconfig pacemaker off
+       chkconfig corosync off
+       service pacemaker stop
+       service corosync stop
+       service network restart
+       exit
+
+You are now ready to reconnect to IML, re-add servers and then recreate
+  another file system.  Simple...
+
+  Like the ./install, re-adding servers also goes much faster this time...
+
+
+
+=======================================================================
+IML "PRO" TIPS
+=======================================================================
+
+    1. The IML user & pass can both be set to "ee".
+       An email address of ee@ee.ee works also. :)
+       The email address can be edited later within IML, if needed.
+
+    2. Add new servers via copy & paste:
+
+       ee-mgs,ee-mds,ee-oss[1-2]
+
+    3. Once the "Server setup" progress dialog appears, close all the
+       pop-up dialogs and view the progress by clicking on the "status"
+       item on the toolbar.
+
+
+
+=======================================================================
+RESIZING STORAGE TARGETS
+=======================================================================
+
+To resize storage targets, destructively:
+
+    1.  Shutdown down the VMs to which the targets are attached.
+
+    2.  Delete the file(s) that represents the storage target(s).
+
+    3.  Use "fallocate" to recreate the file(s).
+
+        kvm# fallocate -l 8192M /intel.lustre/ee.target.ost0.dsk
+
+    4.  Start the VMs.
+
+
+
+=======================================================================
+ADDING STORAGE TARGETS
+=======================================================================
+
+To add storage targets:
+
+    1.  Create the new target.
+
+        kvm# fallocate -l 5G /intel.lustre/ee.target.mdt2.dsk
+
+    2.  Create the XML definition of the new target.
+
+        Increment the target dev, serial, and unit.
+
+        <disk type='file' device='disk'>
+            <driver name='qemu' type='raw' cache='none'/>
+            <source file='/intel.lustre/ee.target.mdt2.dsk'/>
+            <target dev='sdd' bus='scsi'/>
+            <shareable/> 
+            <serial>200002</serial>
+            <address type='drive' controller='0' bus='0' target='0' unit='2'/>
+        </disk>
+
+    3.  Add the new target using the "attach-device" option:
+
+        kvm# virsh attach-device ee-mgs /intel.lustre/target.mdt2.xml --persistent
+        kvm# virsh attach-device ee-mds /intel.lustre/target.mdt2.xml --persistent
+
+        The VMs may be running or not when adding the disks.
+
+        If the servers are added to IML, IML will automatically detect
+        the new storage.  This is seen in the "Status" display.  Removals,
+        and subsequent re-additions, are not notified in the Status by IML.
+
+    4.  Included with are the XML files to create six (6) additional MDTs.
+        You can add them all at once using these two commands:
+
+        kvm# for a in {2..7}; do fallocate -l 5G /intel.lustre/ee.target.ost0.dsk; done
+        kvm# for a in mgs mds; do
+               for b in {2..7}; do
+                 virsh attach-device ee-${a} /intel.lustre/target.mdt${b}.xml --persistent
+               done; done
+
+
+=======================================================================
+REMOVING STORAGE TARGETS
+=======================================================================
+
+NOTE:  If adding/removing targets results in the node getting out of
+       sync with IML, you should remove and re-add the node.
+
+NOTE:  If adding/removing breaks beyond IML, the best advice may be to:
+
+       1. Shutdown the VM.
+
+       2. Edit the VM via:
+          kvm# virsh edit <node>
+
+       3. Verify the edits in /etc/libvirt/qemu/<node>.xml
+
+       4. Restart the VM.
+
+
+To remove a storage target:
+
+    1. Locate the XML file for the VM:
+
+       # ls /etc/libvirt/qemu
+       ee-iml.xml  ee-mds.xml	ee-mgs.xml  ee-oss1.xml  ee-oss2.xml  networks/
+
+    2. Confirm the path of the target:
+
+       # grep "source file" /etc/libvirt/qemu/ee-mgs.xml 
+       <source file='/intel.lustre/ee.mgs.img'/>
+       <source file='/intel.lustre/ee.target.mgt.dsk'/>
+       <source file='/intel.lustre/ee.target.mdt0.dsk'/>
+       <source file='/intel.lustre/ee.target.mdt1.dsk'/>
+       <source file='/intel.lustre/ee.target.mdt2.dsk'/>
+
+    3. Remove the disk (VM running or not):
+
+       # virsh detach-disk ee-mgs /intel.lustre/ee.target.mdt2.dsk --persistent
+       Disk detached successfully
+
+       You probably want to remove it from the HA peer, also:
+
+       # virsh detach-disk ee-mds /intel.lustre/ee.target.mdt2.dsk --persistent
+       Disk detached successfully
+
+
+=======================================================================
+HELPFUL ALIASES
+=======================================================================
+
+KVM:
+alias lll="ll|egrep -v 'img|dsk'"
+
+IML:
+alias mgs="ssh ee-mgs"
+alias mds="ssh ee-mds"
+alias oss1="ssh ee-oss1"
+alias oss2="ssh ee-oss2"
+
+  Then you can use:
+    #iml mgs "shutdown -h now"
+    #iml mds "shutdown -h now"
+    #iml oss1 "shutdown -h now"
+    #iml oss2 "shutdown -h now"
+
+
+=======================================================================
+TROUBLESHOOTING
+=======================================================================
+
+1. Pacemaker
+
+Most troublesome in IML seems to be managing HA.  I've found that after
+doing anything significant, like deleting a file system, its best to
+reset / clear the HA configuration.  Failing to do so often gets IML
+in a state where is unable to manage (start and stop) the resources
+effectively.  This (HA) is a very difficult area, and one that IML
+attempts to provide relief for.  But while it does this for the initial
+setup, subsequent activities are less reliable.
+
+For example, recreating a file system may fail to start one of the targets.
+One way to research the problem outside of IML is by looking at the HA status:
+
+[root@ee-oss2 ~]# pcs resource
+ ee-OST0002_62bc59	(ocf::chroma:Target):	Started ee-oss1 
+ ee-OST0001_f7e925	(ocf::chroma:Target):	Started ee-oss2 
+ ee-OST0000_650c51	(ocf::chroma:Target):	Started ee-oss1 
+ ee-OST0003_003fb3	(ocf::chroma:Target):	Stopped
+
+In this situation, manually (outside of IML) enabling the resource
+solved the problem:
+
+[root@ee-oss2 ~]# pcs resource enable ee-OST0003_003fb3
+[root@ee-oss2 ~]# pcs resource
+ ee-OST0002_62bc59	(ocf::chroma:Target):	Started ee-oss1 
+ ee-OST0001_f7e925	(ocf::chroma:Target):	Started ee-oss2 
+ ee-OST0000_650c51	(ocf::chroma:Target):	Started ee-oss1 
+ ee-OST0003_003fb3	(ocf::chroma:Target):	Started ee-oss2 
+
+But, starting and stopping the file system continued to exhibit issues,
+until the HA configuration was wiped per the method shown above in:
+"SIMPLE WAY TO REPEAT IT ALL".  Sadly, I don't have a good solution
+when attempting to run multiple Lustre file systems managed by IML.
+
+

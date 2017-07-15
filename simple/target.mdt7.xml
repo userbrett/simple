@@ -1,0 +1,8 @@
+<disk type='file' device='disk'>
+    <driver name='qemu' type='raw' cache='none'/>
+    <source file='/intel.lustre/ee.target.mdt7.dsk'/>
+    <target dev='sdi' bus='scsi'/>
+    <shareable/> 
+    <serial>200007</serial>
+    <address type='drive' controller='1' bus='0' target='0' unit='7'/>
+</disk>

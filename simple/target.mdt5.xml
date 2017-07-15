@@ -1,0 +1,8 @@
+<disk type='file' device='disk'>
+    <driver name='qemu' type='raw' cache='none'/>
+    <source file='/intel.lustre/ee.target.mdt5.dsk'/>
+    <target dev='sdg' bus='scsi'/>
+    <shareable/> 
+    <serial>200005</serial>
+    <address type='drive' controller='1' bus='0' target='0' unit='5'/>
+</disk>

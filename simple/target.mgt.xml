@@ -1,0 +1,9 @@
+<disk type='file' device='disk'>
+    <driver name='qemu' type='raw' cache='none'/>
+    <source file='/intel.lustre/ee.target.mgt.dsk'/>
+    <target dev='sda' bus='scsi'/>
+    <shareable/>
+    <serial>100000</serial>
+    <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+</disk>
+

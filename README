@@ -1,0 +1,86 @@
+README
+
+sIMpLe
+Copyright(C) 2016 Brett Lee <brett@brettlee.com>, All Rights Reserved
+
+
+======================================================================
+INTRODUCTION
+======================================================================
+
+Welcome to the sIMpLe project, a simple way to provision
+a Lustre file system using Intel Manager for Lustre (IML).
+
+The files in this directory will create a Lustre VM system
+under KVM in less than an hour.  You can reprovision those
+same VM nodes in about 15 minutes.
+
+Contained within this project are five (5) scripts:
+
+    1. setup.sh - create the VMs
+    2. startup.sh - start the VMs
+    3. stop.sh - stop the VMs
+    4. destroy.sh - destroy (pull the plug on) the VMs
+    5. delete.sh - delete the VMs and Targets
+
+Before creating the Virtual Lustre environment, a VM image must exist in
+this directory.  It must be named, or sym-linked to as, "ee.img".  That
+image will be used to create all the required nodes.
+
+To create a VM image, please see README.create.vm.txt.
+
+Once the VM image is created:
+
+    a.  Copy it into the "ee.lustre.vm" directory as "ee.img".
+    b.  cd into the ee.lustre.vm directory.
+    c.  Run ./setup.sh to create the environment, and then
+        run ./startup.sh to start the VMs.
+    d.  Next, follow the instructions in README.poststart.
+
+To clean up, run:
+
+    a.  Run ./destroy.sh to power off the VMs.
+    b.  Run ./delete.sh to remove the VMs, targets and networks.
+
+The VM system is created as follows:
+                                                
+    VM		MAC Address		RAM	SIZE
+    ------------------------------------------------------
+    IML ee.iml	52:54:00:00:0x:01	2 GB 	4 GB
+    MGS ee.mgs	52:54:00:00:0x:02	1 GB 	4 GB
+    MDS ee.mds	52:54:00:00:0x:03	1 GB 	4 GB
+    OSS ee.oss1	52:54:00:00:0x:04	1 GB 	4 GB
+    OSS ee.oss2	52:54:00:00:0x:05	1 GB 	4 GB
+    CLI ee.cli	52:54:00:00:0x:06	1 GB 	4 GB
+
+The MAC addresses correspond to the interface, in that 
+on eth0 the x will be 0, on eth1 the x will be 1, and
+on eth2 the x will be 2.
+
+Lustre Storage Targets and Sizes are:
+
+    MGT   100 MB
+    MDT0    5 GB
+    MDT1    5 GB
+    OST0    5 GB
+    OST1    5 GB
+    OST2    5 GB
+    OST3    5 GB
+
+Can the MDT/OST targets be decreased?  At the time this project
+was created, there were some fixed values in IML preventing the use
+of smaller storage targets.
+
+Expectations for the KVM host:
+------------------------------------------------------
+1.  A CentOS 6 server with functional KVM support.
+2.  KVM node has sufficient RAM - 16GB or more.
+3.  KVM node has sufficient CPU.
+    - Built/tested using 1 Intel(R) Core(TM) i7-2600K CPU @ 3.40GHz.
+4.  KVM node has 60GB+ of free space in the project directory.
+5.  The bridge, br0, must be present on the KVM node.
+6.  DHCP will provide IP addresses to each VM eth0 interface via br0.
+7.  Forward and reverse DNS are configured for eth0 on all the VMs.
+
+For networking hints, please see README.networking.
+
